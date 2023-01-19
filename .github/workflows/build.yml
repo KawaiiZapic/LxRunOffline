@@ -1,24 +1,40 @@
 on: push
 jobs:
-  build-mingw:
+  build-msvc:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@master
+      - uses: actions/cache@master
+        with:
+          path: ~\AppData\Local\vcpkg
+          key: vcpkg-cache
       - env:
-          MSYSTEM: MINGW64
+          VCPKG_DEFAULT_TRIPLET: x64-windows-static
         run: |
           $ErrorActionPreference = "Continue"
-          C:\msys64\usr\bin\bash.exe -l -c "pacman -Syu --noconfirm --noprogressbar"
-          C:\msys64\usr\bin\bash.exe -l -c "pacman -Syu --needed --noconfirm --noprogressbar base-devel cmake git mingw-w64-x86_64-toolchain mingw-w64-x86_64-libarchive mingw-w64-x86_64-boost mingw-w64-x86_64-tinyxml2"
+          pushd $Env:VCPKG_INSTALLATION_ROOT
+          git pull
+          git apply "$Env:GITHUB_WORKSPACE\misc\vcpkg-libarchive-slash.patch"
+          .\bootstrap-vcpkg.bat
+          popd
+          vcpkg integrate install
+          vcpkg install libarchive boost-program-options boost-format boost-algorithm boost-test tinyxml2
           git fetch --unshallow --tags
-          C:\msys64\usr\bin\bash.exe -l -c "
-            cd /d/a/LxRunOffline/LxRunOffline &&
-            cmake -G 'MSYS Makefiles' -DCMAKE_BUILD_TYPE=Release . &&
-            make -j && make test && make package"
-          $version = git describe --tags
-          cmd /c "move LxRunOffline-$(git describe --tags)-mingw.zip LxRunOffline-mingw.zip"
+          cmd /c '"C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat" & set' |
+            foreach { if ($_ -match "=") { $v = $_.split("="); Set-Item -Force -Path "Env:\$($v[0])" -Value "$($v[1])" } }
+          cmake . `
+            -G "NMake Makefiles" `
+            -DCMAKE_TOOLCHAIN_FILE="$Env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET="$Env:VCPKG_DEFAULT_TRIPLET" `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DBUILD_CHOCO_PKG=ON
+          nmake
+          nmake test
+          nmake package
           if ($LASTEXITCODE -ne 0) { Exit 1 }
+          $version = git describe --tags
+          cmd /c "rename LxRunOffline-$version-msvc.zip LxRunOffline-msvc.zip"
       - uses: actions/upload-artifact@v3
         with:
-          name: LxRunOffline-mingw.zip
-          path: LxRunOffline-mingw.zip
+          name: LxRunOffline-msvc.zip
+          path: LxRunOffline-msvc.zip
