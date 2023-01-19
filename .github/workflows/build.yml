@@ -16,9 +16,9 @@ jobs:
             cmake -G 'MSYS Makefiles' -DCMAKE_BUILD_TYPE=Release . &&
             make -j && make test && make package"
           $version = git describe --tags
-          move LxRunOffline-$version-msvc.zip LxRunOffline-msvc.zip 
+          cmd /c "move LxRunOffline-$(git describe --tags)-mingw.zip LxRunOffline-mingw.zip"
           if ($LASTEXITCODE -ne 0) { Exit 1 }
       - uses: actions/upload-artifact@v3
         with:
-          name: LxRunOffline-msvc.zip
-          path: LxRunOffline-msvc.zip
+          name: LxRunOffline-mingw.zip
+          path: LxRunOffline-mingw.zip
